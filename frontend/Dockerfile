@@ -1,5 +1,7 @@
 FROM node:22-alpine AS build
 WORKDIR /app
+ARG VITE_API_URL=https://media-scheduler-backend.onrender.com
+ENV VITE_API_URL=${VITE_API_URL}
 COPY package*.json ./
 RUN npm install
 COPY . .
