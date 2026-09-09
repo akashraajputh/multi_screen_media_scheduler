@@ -1,9 +1,7 @@
 package routes
-package routes
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -21,9 +19,10 @@ func SetupRoutes(service *services.Service) http.Handler {
 	api := &API{service: service}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/windows", api.handleWindows)
-	mux.HandleFunc("/api/media", api.handleMedia)
 	mux.HandleFunc("/api/windows/", api.handleWindowDetail)
+	mux.HandleFunc("/api/media", api.handleMedia)
 	mux.HandleFunc("/api/sync", api.handleSync)
+	mux.HandleFunc("/api/sync/", api.handleSync)
 	return middleware.CorsMiddleware(mux)
 }
 
@@ -37,18 +36,6 @@ func (a *API) writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func (a *API) writeError(w http.ResponseWriter, status int, message string) {
 	a.writeJSON(w, status, map[string]any{"error": message})
-}
-
-func (a *API) parsePathID(r *http.Request) (int, error) {
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) < 2 || parts[1] == "" {
-		return 0, fmt.Errorf("missing id")
-	}
-	id, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return 0, err
-	}
-	return id, nil
 }
 
 func (a *API) handleWindows(w http.ResponseWriter, r *http.Request) {
@@ -86,37 +73,46 @@ func (a *API) handleWindowDetail(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, http.StatusNotFound, "window not found")
 		return
 	}
-	id, err := strconv.Atoi(parts[0])
+
+	windowID, err := strconv.Atoi(parts[0])
 	if err != nil {
 		a.writeError(w, http.StatusBadRequest, "invalid window id")
 		return
 	}
 
-	window, err := a.service.WindowByID(id)
-	if err != nil {
-		a.writeError(w, http.StatusNotFound, "window not found")
+	if len(parts) == 1 {
+		switch r.Method {
+		case http.MethodGet:
+			window, err := a.service.WindowByID(windowID)
+			if err != nil {
+				a.writeError(w, http.StatusNotFound, "window not found")
+				return
+			}
+			a.writeJSON(w, http.StatusOK, window)
+		case http.MethodDelete:
+			if err := a.service.DeleteWindow(windowID); err != nil {
+				a.writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			a.writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+		default:
+			a.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
 		return
 	}
 
-	switch r.Method {
-	case http.MethodGet:
-		if len(parts) == 1 {
-			a.writeJSON(w, http.StatusOK, window)
-			return
-		}
-		if len(parts) == 2 && parts[1] == "playlist" {
-			items, err := a.service.PlaylistForWindow(id)
+	if len(parts) == 2 && parts[1] == "playlist" {
+		switch r.Method {
+		case http.MethodGet:
+			items, err := a.service.PlaylistForWindow(windowID)
 			if err != nil {
 				a.writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-			a.writeJSON(w, http.StatusOK, map[string]any{"window_id": id, "playlist": items})
-			return
-		}
-	case http.MethodPost:
-		if len(parts) == 2 && parts[1] == "playlist" {
+			a.writeJSON(w, http.StatusOK, map[string]any{"window_id": windowID, "playlist": items})
+		case http.MethodPost:
 			var payload struct {
-				MediaID int `json:"media_id"`
+				MediaID  int `json:"media_id"`
 				Duration int `json:"duration"`
 				Position int `json:"position"`
 			}
@@ -124,35 +120,26 @@ func (a *API) handleWindowDetail(w http.ResponseWriter, r *http.Request) {
 				a.writeError(w, http.StatusBadRequest, "invalid request body")
 				return
 			}
-			item, err := a.service.AddPlaylistItem(id, payload.MediaID, payload.Duration, payload.Position)
+			item, err := a.service.AddPlaylistItem(windowID, payload.MediaID, payload.Duration, payload.Position)
 			if err != nil {
 				a.writeError(w, http.StatusBadRequest, err.Error())
 				return
 			}
 			a.writeJSON(w, http.StatusCreated, item)
+		default:
+			a.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
+	if len(parts) == 3 && parts[1] == "playlist" {
+		itemID, err := strconv.Atoi(parts[2])
+		if err != nil {
+			a.writeError(w, http.StatusBadRequest, "invalid item id")
 			return
 		}
-	case http.MethodDelete:
-		if len(parts) == 2 && parts[1] == "playlist" {
-			itemID, err := strconv.Atoi(parts[0])
-			if err != nil {
-				a.writeError(w, http.StatusBadRequest, "invalid item id")
-				return
-			}
-			if err := a.service.DeletePlaylistItem(itemID); err != nil {
-				a.writeError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			a.writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
-			return
-		}
-	case http.MethodPut:
-		if len(parts) == 3 && parts[1] == "playlist" {
-			itemID, err := strconv.Atoi(parts[2])
-			if err != nil {
-				a.writeError(w, http.StatusBadRequest, "invalid item id")
-				return
-			}
+		switch r.Method {
+		case http.MethodPut:
 			var payload struct {
 				Duration int `json:"duration"`
 				Position int `json:"position"`
@@ -167,17 +154,18 @@ func (a *API) handleWindowDetail(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			a.writeJSON(w, http.StatusOK, item)
-			return
+		case http.MethodDelete:
+			if err := a.service.DeletePlaylistItem(itemID); err != nil {
+				a.writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			a.writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+		default:
+			a.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		}
-	}
-	if r.Method == http.MethodDelete {
-		if err := a.service.DeleteWindow(id); err != nil {
-			a.writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		a.writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 		return
 	}
+
 	a.writeError(w, http.StatusNotFound, "resource not found")
 }
 
@@ -214,7 +202,7 @@ func (a *API) handleMedia(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/sync")
-	if path == "" {
+	if path == "" || path == "/" {
 		switch r.Method {
 		case http.MethodGet:
 			event, err := a.service.ActiveSync()
@@ -225,7 +213,7 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 			a.writeJSON(w, http.StatusOK, map[string]any{"sync": event})
 		case http.MethodPost:
 			var payload struct {
-				MediaID int `json:"media_id"`
+				MediaID  int `json:"media_id"`
 				Duration int `json:"duration"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -237,17 +225,13 @@ func (a *API) handleSync(w http.ResponseWriter, r *http.Request) {
 				a.writeError(w, http.StatusBadRequest, err.Error())
 				return
 			}
-			a.writeJSON(w, http.StatusCreated, event)
+			a.writeJSON(w, http.StatusCreated, map[string]any{"sync": event})
 		default:
 			a.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		}
 		return
 	}
 	if path == "/active" {
-		if r.Method != http.MethodGet {
-			a.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
 		event, err := a.service.ActiveSync()
 		if err != nil {
 			a.writeError(w, http.StatusInternalServerError, err.Error())

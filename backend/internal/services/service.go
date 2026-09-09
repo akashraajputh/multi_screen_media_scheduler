@@ -1,5 +1,4 @@
 package services
-package services
 
 import (
 	"database/sql"

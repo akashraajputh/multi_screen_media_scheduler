@@ -1,5 +1,4 @@
 package seed
-package seed
 
 import (
 	"database/sql"
@@ -8,19 +7,6 @@ import (
 )
 
 func LoadDefaultData(db *sql.DB) error {
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS windows (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`); err != nil {
-		return err
-	}
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS media (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, type TEXT NOT NULL, url TEXT, default_duration INTEGER NOT NULL DEFAULT 5, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`); err != nil {
-		return err
-	}
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS playlist_items (id INTEGER PRIMARY KEY AUTOINCREMENT, window_id INTEGER NOT NULL, media_id INTEGER NOT NULL, duration INTEGER NOT NULL, position INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(window_id) REFERENCES windows(id) ON DELETE CASCADE, FOREIGN KEY(media_id) REFERENCES media(id) ON DELETE RESTRICT);`); err != nil {
-		return err
-	}
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS sync_events (id INTEGER PRIMARY KEY AUTOINCREMENT, media_id INTEGER NOT NULL, start_time TEXT NOT NULL, duration INTEGER NOT NULL, end_time TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(media_id) REFERENCES media(id) ON DELETE RESTRICT);`); err != nil {
-		return err
-	}
-
 	windows := []string{"Window 1", "Window 2", "Window 3"}
 	for _, name := range windows {
 		var exists int
@@ -35,10 +21,10 @@ func LoadDefaultData(db *sql.DB) error {
 	}
 
 	media := []struct {
-		name string
+		name      string
 		mediaType string
-		url string
-		duration int
+		url       string
+		duration  int
 	}{
 		{"M1", "image", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80", 5},
 		{"M2", "image", "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=1200&q=80", 6},
@@ -61,7 +47,7 @@ func LoadDefaultData(db *sql.DB) error {
 	}
 
 	defaultPlaylists := map[string][]struct {
-		name string
+		name     string
 		position int
 	}{
 		"Window 1": {{"M1", 1}, {"M2", 2}, {"M3", 3}},

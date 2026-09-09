@@ -1,5 +1,4 @@
 package repositories
-package repositories
 
 import (
 	"database/sql"
@@ -39,22 +38,22 @@ func (r *Repository) GetWindows() ([]models.Window, error) {
 
 	windows := make([]models.Window, 0)
 	for rows.Next() {
-		var w models.Window
-		if err := rows.Scan(&w.ID, &w.Name, &w.CreatedAt, &w.UpdatedAt); err != nil {
+		var window models.Window
+		if err := rows.Scan(&window.ID, &window.Name, &window.CreatedAt, &window.UpdatedAt); err != nil {
 			return nil, err
 		}
-		windows = append(windows, w)
+		windows = append(windows, window)
 	}
 	return windows, rows.Err()
 }
 
 func (r *Repository) GetWindow(id int) (*models.Window, error) {
 	row := r.db.QueryRow("SELECT id, name, created_at, updated_at FROM windows WHERE id = ?", id)
-	var w models.Window
-	if err := row.Scan(&w.ID, &w.Name, &w.CreatedAt, &w.UpdatedAt); err != nil {
+	var window models.Window
+	if err := row.Scan(&window.ID, &window.Name, &window.CreatedAt, &window.UpdatedAt); err != nil {
 		return nil, err
 	}
-	return &w, nil
+	return &window, nil
 }
 
 func (r *Repository) DeleteWindow(id int) error {
@@ -71,13 +70,31 @@ func (r *Repository) GetMedia() ([]models.Media, error) {
 
 	items := make([]models.Media, 0)
 	for rows.Next() {
-		var m models.Media
-		if err := rows.Scan(&m.ID, &m.Name, &m.Type, &m.URL, &m.DefaultDuration, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		var media models.Media
+		if err := rows.Scan(&media.ID, &media.Name, &media.Type, &media.URL, &media.DefaultDuration, &media.CreatedAt, &media.UpdatedAt); err != nil {
 			return nil, err
 		}
-		items = append(items, m)
+		items = append(items, media)
 	}
 	return items, rows.Err()
+}
+
+func (r *Repository) GetMediaByID(id int) (*models.Media, error) {
+	row := r.db.QueryRow("SELECT id, name, type, url, default_duration, created_at, updated_at FROM media WHERE id = ?", id)
+	var media models.Media
+	if err := row.Scan(&media.ID, &media.Name, &media.Type, &media.URL, &media.DefaultDuration, &media.CreatedAt, &media.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &media, nil
+}
+
+func (r *Repository) GetMediaByName(name string) (*models.Media, error) {
+	row := r.db.QueryRow("SELECT id, name, type, url, default_duration, created_at, updated_at FROM media WHERE name = ? LIMIT 1", name)
+	var media models.Media
+	if err := row.Scan(&media.ID, &media.Name, &media.Type, &media.URL, &media.DefaultDuration, &media.CreatedAt, &media.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &media, nil
 }
 
 func (r *Repository) CreateMedia(name, mediaType, url string, defaultDuration int) (*models.Media, error) {
@@ -92,18 +109,13 @@ func (r *Repository) CreateMedia(name, mediaType, url string, defaultDuration in
 	return r.GetMediaByID(int(id))
 }
 
-func (r *Repository) GetMediaByID(id int) (*models.Media, error) {
-	row := r.db.QueryRow("SELECT id, name, type, url, default_duration, created_at, updated_at FROM media WHERE id = ?", id)
-	var m models.Media
-	if err := row.Scan(&m.ID, &m.Name, &m.Type, &m.URL, &m.DefaultDuration, &m.CreatedAt, &m.UpdatedAt); err != nil {
-		return nil, err
-	}
-	return &m, nil
-}
-
 func (r *Repository) AddPlaylistItem(windowID, mediaID, duration, position int) (*models.PlaylistItem, error) {
 	if position <= 0 {
-		position = 1
+		var maxPosition int
+		if err := r.db.QueryRow("SELECT COALESCE(MAX(position), 0) FROM playlist_items WHERE window_id = ?", windowID).Scan(&maxPosition); err != nil {
+			return nil, err
+		}
+		position = maxPosition + 1
 	}
 	res, err := r.db.Exec("INSERT INTO playlist_items(window_id, media_id, duration, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", windowID, mediaID, duration, position, time.Now().UTC().Format(time.RFC3339), time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
@@ -118,7 +130,7 @@ func (r *Repository) AddPlaylistItem(windowID, mediaID, duration, position int) 
 
 func (r *Repository) GetPlaylistItems(windowID int) ([]models.PlaylistItem, error) {
 	rows, err := r.db.Query(`
-		SELECT p.id, p.window_id, p.media_id, m.type, m.url, p.duration, p.position, p.created_at, p.updated_at
+		SELECT p.id, p.window_id, p.media_id, m.name, m.type, m.url, p.duration, p.position, p.created_at, p.updated_at
 		FROM playlist_items p
 		JOIN media m ON m.id = p.media_id
 		WHERE p.window_id = ?
@@ -131,10 +143,11 @@ func (r *Repository) GetPlaylistItems(windowID int) ([]models.PlaylistItem, erro
 	items := make([]models.PlaylistItem, 0)
 	for rows.Next() {
 		var item models.PlaylistItem
-		if err := rows.Scan(&item.ID, &item.WindowID, &item.MediaID, &item.MediaType, &item.MediaURL, &item.Duration, &item.Position, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		var mediaName string
+		if err := rows.Scan(&item.ID, &item.WindowID, &item.MediaID, &mediaName, &item.MediaType, &item.MediaURL, &item.Duration, &item.Position, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return nil, err
 		}
-		item.Media = &models.Media{ID: item.MediaID, Type: item.MediaType, URL: item.MediaURL}
+		item.Media = &models.Media{ID: item.MediaID, Name: mediaName, Type: item.MediaType, URL: item.MediaURL}
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -142,15 +155,16 @@ func (r *Repository) GetPlaylistItems(windowID int) ([]models.PlaylistItem, erro
 
 func (r *Repository) GetPlaylistItemByID(itemID int) (*models.PlaylistItem, error) {
 	row := r.db.QueryRow(`
-		SELECT p.id, p.window_id, p.media_id, m.type, m.url, p.duration, p.position, p.created_at, p.updated_at
+		SELECT p.id, p.window_id, p.media_id, m.name, m.type, m.url, p.duration, p.position, p.created_at, p.updated_at
 		FROM playlist_items p
 		JOIN media m ON m.id = p.media_id
 		WHERE p.id = ?`, itemID)
 	var item models.PlaylistItem
-	if err := row.Scan(&item.ID, &item.WindowID, &item.MediaID, &item.MediaType, &item.MediaURL, &item.Duration, &item.Position, &item.CreatedAt, &item.UpdatedAt); err != nil {
+	var mediaName string
+	if err := row.Scan(&item.ID, &item.WindowID, &item.MediaID, &mediaName, &item.MediaType, &item.MediaURL, &item.Duration, &item.Position, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return nil, err
 	}
-	item.Media = &models.Media{ID: item.MediaID, Type: item.MediaType, URL: item.MediaURL}
+	item.Media = &models.Media{ID: item.MediaID, Name: mediaName, Type: item.MediaType, URL: item.MediaURL}
 	return &item, nil
 }
 
@@ -170,25 +184,12 @@ func (r *Repository) DeletePlaylistItem(itemID int) error {
 	return err
 }
 
-func (r *Repository) ReorderPlaylist(windowID int, orderedIDs []int) error {
-	if len(orderedIDs) == 0 {
-		return nil
-	}
-	for index, itemID := range orderedIDs {
-		if _, err := r.db.Exec("UPDATE playlist_items SET position = ?, updated_at = ? WHERE id = ? AND window_id = ?", index+1, time.Now().UTC().Format(time.RFC3339), itemID, windowID); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (r *Repository) CreateSyncEvent(mediaID, duration int, start time.Time) (*models.SyncEvent, error) {
-	startTime := start.UTC().Format(time.RFC3339)
-	endTime := start.Add(time.Duration(duration) * time.Second).UTC().Format(time.RFC3339)
 	if _, err := r.db.Exec("UPDATE sync_events SET status = 'expired' WHERE status = 'active'"); err != nil {
 		return nil, err
 	}
-	res, err := r.db.Exec("INSERT INTO sync_events(media_id, start_time, duration, end_time, status, created_at) VALUES (?, ?, ?, ?, ?, ?)", mediaID, startTime, duration, endTime, "active", time.Now().UTC().Format(time.RFC3339))
+	endTime := start.Add(time.Duration(duration) * time.Second)
+	res, err := r.db.Exec("INSERT INTO sync_events(media_id, start_time, duration, end_time, status, created_at) VALUES (?, ?, ?, ?, ?, ?)", mediaID, start.UTC().Format(time.RFC3339), duration, endTime.UTC().Format(time.RFC3339), "active", time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, err
 	}
@@ -201,35 +202,49 @@ func (r *Repository) CreateSyncEvent(mediaID, duration int, start time.Time) (*m
 
 func (r *Repository) GetActiveSyncEvent(id int) (*models.SyncEvent, error) {
 	row := r.db.QueryRow(`
-		SELECT s.id, s.media_id, m.type, m.url, s.start_time, s.duration, s.end_time, s.status, s.created_at
+		SELECT s.id, s.media_id, m.name, m.type, m.url, s.start_time, s.duration, s.end_time, s.status, s.created_at
 		FROM sync_events s
 		JOIN media m ON m.id = s.media_id
 		WHERE s.id = ?`, id)
 	var event models.SyncEvent
-	if err := row.Scan(&event.ID, &event.MediaID, &event.MediaType, &event.MediaURL, &event.StartTime, &event.Duration, &event.EndTime, &event.Status, &event.CreatedAt); err != nil {
+	var startTime, endTime, createdAt string
+	var mediaName string
+	if err := row.Scan(&event.ID, &event.MediaID, &mediaName, &event.MediaType, &event.MediaURL, &startTime, &event.Duration, &endTime, &event.Status, &createdAt); err != nil {
 		return nil, err
 	}
-	event.Media = &models.Media{ID: event.MediaID, Type: event.MediaType, URL: event.MediaURL}
+	event.Media = &models.Media{ID: event.MediaID, Name: mediaName, Type: event.MediaType, URL: event.MediaURL}
+	if parsed, err := time.Parse(time.RFC3339, startTime); err == nil {
+		event.StartTime = parsed
+	}
+	if parsed, err := time.Parse(time.RFC3339, endTime); err == nil {
+		event.EndTime = parsed
+	}
+	event.CreatedAt = createdAt
 	return &event, nil
 }
 
 func (r *Repository) GetCurrentSyncEvent() (*models.SyncEvent, error) {
 	row := r.db.QueryRow(`
-		SELECT s.id, s.media_id, m.type, m.url, s.start_time, s.duration, s.end_time, s.status, s.created_at
+		SELECT s.id, s.media_id, m.name, m.type, m.url, s.start_time, s.duration, s.end_time, s.status, s.created_at
 		FROM sync_events s
 		JOIN media m ON m.id = s.media_id
 		WHERE s.status = 'active'
 		ORDER BY s.created_at DESC
 		LIMIT 1`)
 	var event models.SyncEvent
-	var start string
-	var end string
-	if err := row.Scan(&event.ID, &event.MediaID, &event.MediaType, &event.MediaURL, &start, &event.Duration, &end, &event.Status, &event.CreatedAt); err != nil {
+	var startTime, endTime, createdAt string
+	var mediaName string
+	if err := row.Scan(&event.ID, &event.MediaID, &mediaName, &event.MediaType, &event.MediaURL, &startTime, &event.Duration, &endTime, &event.Status, &createdAt); err != nil {
 		return nil, err
 	}
-	event.StartTime, _ = time.Parse(time.RFC3339, start)
-	event.EndTime, _ = time.Parse(time.RFC3339, end)
-	event.Media = &models.Media{ID: event.MediaID, Type: event.MediaType, URL: event.MediaURL}
+	event.Media = &models.Media{ID: event.MediaID, Name: mediaName, Type: event.MediaType, URL: event.MediaURL}
+	if parsed, err := time.Parse(time.RFC3339, startTime); err == nil {
+		event.StartTime = parsed
+	}
+	if parsed, err := time.Parse(time.RFC3339, endTime); err == nil {
+		event.EndTime = parsed
+	}
+	event.CreatedAt = createdAt
 	return &event, nil
 }
 
@@ -241,15 +256,6 @@ func (r *Repository) StopSyncEvent() error {
 func (r *Repository) ExpireSyncEvents() error {
 	_, err := r.db.Exec("UPDATE sync_events SET status = 'expired' WHERE status = 'active' AND end_time <= ?", time.Now().UTC().Format(time.RFC3339))
 	return err
-}
-
-func (r *Repository) GetMediaByName(name string) (*models.Media, error) {
-	row := r.db.QueryRow("SELECT id, name, type, url, default_duration, created_at, updated_at FROM media WHERE name = ? LIMIT 1", name)
-	var m models.Media
-	if err := row.Scan(&m.ID, &m.Name, &m.Type, &m.URL, &m.DefaultDuration, &m.CreatedAt, &m.UpdatedAt); err != nil {
-		return nil, err
-	}
-	return &m, nil
 }
 
 func (r *Repository) WindowPlaylist(windowID int) ([]models.PlaylistItem, error) {
@@ -273,38 +279,20 @@ func (r *Repository) WindowCycleDuration(windowID int) (int, error) {
 	return seconds, nil
 }
 
-func (r *Repository) CheckMediaExists(mediaID int) bool {
-	var count int
-	if err := r.db.QueryRow("SELECT COUNT(*) FROM media WHERE id = ?", mediaID).Scan(&count); err != nil {
-		return false
-	}
-	return count > 0
-}
-
-func (r *Repository) UpsertWindow(windowID int, name string) (*models.Window, error) {
-	if windowID == 0 {
-		return r.CreateWindow(name)
-	}
-	_, err := r.db.Exec("UPDATE windows SET name = ?, updated_at = ? WHERE id = ?", name, time.Now().UTC().Format(time.RFC3339), windowID)
-	if err != nil {
-		return nil, err
-	}
-	return r.GetWindow(windowID)
-}
-
 func (r *Repository) CreateDefaultMedia() error {
 	seed := []struct {
-		name string
+		name      string
 		mediaType string
-		url string
-		duration int
+		url       string
+		duration  int
 	}{
 		{"M1", "image", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80", 5},
 		{"M2", "image", "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=1200&q=80", 6},
 		{"M3", "video", "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4", 8},
-		{"M4", "blank", "", 4},
-		{"M5", "image", "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1200&q=80", 7},
+		{"M4", "image", "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=1200&q=80", 4},
+		{"M5", "image", "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=80", 7},
 		{"M6", "video", "https://www.w3schools.com/html/mov_bbb.mp4", 9},
+		{"Blank", "blank", "", 4},
 	}
 	for _, item := range seed {
 		if _, err := r.GetMediaByName(item.name); err == nil {
