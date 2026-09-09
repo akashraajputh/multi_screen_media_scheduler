@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"multi-screen-media-scheduler/internal/database"
@@ -16,7 +17,11 @@ import (
 func main() {
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = "./data/media_scheduler.db"
+		if os.Getenv("RENDER") == "true" {
+			dbPath = filepath.Join(os.TempDir(), "media_scheduler.db")
+		} else {
+			dbPath = "./data/media_scheduler.db"
+		}
 	}
 
 	db, err := database.Initialize(dbPath)

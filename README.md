@@ -206,7 +206,7 @@ This project is structured for Docker-based deployment and is compatible with Re
 
 - Backend: Go REST API container on port 8080
 - Frontend: React production build served on port 4173
-- Database: SQLite stored in a persistent disk mounted at /data
+- Database: SQLite stored in the system temp directory on the free plan so the app still runs without a mounted disk
 - Communication: frontend calls the backend through VITE_API_URL, not localhost
 
 ### Docker files
@@ -226,8 +226,7 @@ This project is structured for Docker-based deployment and is compatible with Re
    - Port: 8080
    - Environment variables:
      - PORT=8080
-     - DB_PATH=/data/media_scheduler.db
-   - Add a persistent disk mounted at /data
+     - DB_PATH=/tmp/media_scheduler.db
 6. Confirm frontend service settings:
    - Environment: Docker
    - Port: 4173
@@ -246,7 +245,7 @@ VITE_API_URL=https://media-scheduler-backend.onrender.com
 
 ```env
 PORT=8080
-DB_PATH=/data/media_scheduler.db
+DB_PATH=/tmp/media_scheduler.db
 ```
 
 ### Render notes
@@ -280,4 +279,5 @@ This starts the backend on port 8080 and the frontend on port 5173 locally.
 
 - If the frontend cannot connect to the API, verify VITE_API_URL is set to the deployed backend URL.
 - If the backend fails to start, verify the port and DB_PATH environment variables are correct.
-- If data resets after deploy, ensure the persistent disk is mounted correctly.
+- On the free Render plan, database data is expected to reset after restarts or redeploys because the app uses SQLite in the temp filesystem.
+- If you need long-term persistence, upgrade to a paid Render plan or move the database to an external service.
