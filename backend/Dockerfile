@@ -10,7 +10,6 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /app/server /app/server
 ENV PORT=8080
-ENV DB_PATH=/data/media_scheduler.db
-RUN mkdir -p /data
+ENV DB_PATH=/tmp/media_scheduler.db
 EXPOSE 8080
 CMD ["/app/server"]
