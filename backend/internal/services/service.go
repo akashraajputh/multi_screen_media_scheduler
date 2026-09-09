@@ -166,12 +166,44 @@ func (s *Service) EnsureSeedData() error {
 	if err := s.repo.CreateDefaultMedia(); err != nil {
 		return err
 	}
-	windows, err := s.repo.GetWindows()
-	if err != nil {
-		return err
+
+	defaultWindows := []string{"Window 1", "Window 2", "Window 3"}
+	for _, name := range defaultWindows {
+		if _, err := s.repo.GetWindowByName(name); err != nil {
+			if _, createErr := s.repo.CreateWindow(name); createErr != nil {
+				return fmt.Errorf("create seed window %s: %w", name, createErr)
+			}
+		}
 	}
-	if len(windows) >= 3 {
-		return nil
+
+	defaultPlaylists := map[string][]string{
+		"Window 1": {"M1", "M2", "M3"},
+		"Window 2": {"M2", "M4", "M5"},
+		"Window 3": {"M1", "M5", "M6"},
 	}
-	return s.CreateSeedWindows()
+
+	for windowName, mediaNames := range defaultPlaylists {
+		window, err := s.repo.GetWindowByName(windowName)
+		if err != nil {
+			return fmt.Errorf("get window %s: %w", windowName, err)
+		}
+		items, err := s.repo.GetPlaylistItems(window.ID)
+		if err != nil {
+			return fmt.Errorf("get playlist for %s: %w", windowName, err)
+		}
+		if len(items) > 0 {
+			continue
+		}
+		for position, mediaName := range mediaNames {
+			media, err := s.repo.GetMediaByName(mediaName)
+			if err != nil {
+				return fmt.Errorf("get media %s: %w", mediaName, err)
+			}
+			if _, err := s.repo.AddPlaylistItem(window.ID, media.ID, media.DefaultDuration, position+1); err != nil {
+				return fmt.Errorf("add playlist item for %s/%s: %w", windowName, mediaName, err)
+			}
+		}
+	}
+
+	return nil
 }

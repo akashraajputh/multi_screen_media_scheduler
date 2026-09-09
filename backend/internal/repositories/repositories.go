@@ -56,6 +56,15 @@ func (r *Repository) GetWindow(id int) (*models.Window, error) {
 	return &window, nil
 }
 
+func (r *Repository) GetWindowByName(name string) (*models.Window, error) {
+	row := r.db.QueryRow("SELECT id, name, created_at, updated_at FROM windows WHERE name = ? LIMIT 1", name)
+	var window models.Window
+	if err := row.Scan(&window.ID, &window.Name, &window.CreatedAt, &window.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &window, nil
+}
+
 func (r *Repository) DeleteWindow(id int) error {
 	_, err := r.db.Exec("DELETE FROM windows WHERE id = ?", id)
 	return err
