@@ -133,6 +133,31 @@ function App() {
     }
   }
 
+  const deleteWindow = async (windowId) => {
+    if (!windowId) return
+    try {
+      await request(`/api/windows/${windowId}`, {
+        method: 'DELETE',
+      })
+
+      const remainingWindows = windows.filter((window) => window.id !== windowId)
+      const nextWindowId = remainingWindows[0]?.id ?? null
+
+      setWindows(remainingWindows)
+      setSelectedWindowId((current) => (current === windowId ? nextWindowId : current))
+
+      if (nextWindowId) {
+        await refreshPlaylist(nextWindowId)
+      } else {
+        setPlaylist([])
+      }
+
+      setStatus('Window removed')
+    } catch (error) {
+      setStatus(error.message)
+    }
+  }
+
   const addMediaToPlaylist = async (mediaId) => {
     if (!selectedWindowId) return
     try {
@@ -245,15 +270,27 @@ function App() {
 
           <div className="window-list">
             {windows.map((window) => (
-              <button
-                key={window.id}
-                type="button"
-                className={`window-item ${selectedWindowId === window.id ? 'selected' : ''}`}
-                onClick={() => setSelectedWindowId(window.id)}
-              >
-                <span>{window.name}</span>
-                <small>{playlist.length} items</small>
-              </button>
+              <div key={window.id} className={`window-item ${selectedWindowId === window.id ? 'selected' : ''}`}>
+                <button
+                  type="button"
+                  className="window-select-button"
+                  onClick={() => setSelectedWindowId(window.id)}
+                >
+                  <span>{window.name}</span>
+                  <small>{playlist.length} items</small>
+                </button>
+                <button
+                  type="button"
+                  className="window-delete-btn"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    deleteWindow(window.id)
+                  }}
+                  aria-label={`Delete ${window.name}`}
+                >
+                  Remove
+                </button>
+              </div>
             ))}
           </div>
         </aside>

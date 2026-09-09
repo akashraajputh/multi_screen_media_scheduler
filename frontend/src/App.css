@@ -131,14 +131,13 @@ button.secondary,
 
 .window-item {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  text-align: left;
+  align-items: stretch;
+  gap: 8px;
   background: rgba(30, 41, 59, 0.8);
   border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
   color: #edf3ff;
-  padding: 14px 12px;
+  padding: 8px 10px;
 }
 
 .window-item.selected {
@@ -146,8 +145,29 @@ button.secondary,
   border-color: rgba(117, 141, 255, 0.8);
 }
 
-.window-item small {
+.window-select-button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 4px;
+  background: transparent;
+  padding: 8px 6px;
+  border-radius: 8px;
+  color: #edf3ff;
+}
+
+.window-select-button small {
   color: #94a3b8;
+}
+
+.window-delete-btn {
+  min-width: 80px;
+  background: rgba(239, 68, 68, 0.18);
+  color: #ffdfe3;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  padding: 8px 10px;
 }
 
 .main-panel {
