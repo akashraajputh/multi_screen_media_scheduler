@@ -252,8 +252,13 @@ DB_PATH=/data/media_scheduler.db
 ### Render notes
 
 - Use the actual backend Render URL in the frontend; do not use localhost in production.
-- The backend SQLite database must persist across redeploys, so keep the mounted /data disk.
+- On the free Render plan, persistent disks are not supported, so SQLite data is stored in /tmp and will reset when the service restarts or redeploys.
+- This setup is suitable for demo or testing deployments, not for long-term production persistence.
 - The frontend is served as a production build and should not use the Vite dev server in Render.
+
+### Free plan deployment warning
+
+Render free-tier services do not support persistent disk mounts. Because this project uses SQLite, the database will be ephemeral on free hosting. If you need durable data, upgrade to a paid plan or move the database to an external service.
 
 ### Local Docker run
 

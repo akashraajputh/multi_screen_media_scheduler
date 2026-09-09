@@ -10,11 +10,7 @@ services:
       - key: PORT
         value: 8080
       - key: DB_PATH
-        value: /data/media_scheduler.db
-    disk:
-      name: media-scheduler-data
-      mountPath: /data
-      sizeGB: 1
+        value: /tmp/media_scheduler.db
 
   - type: web
     name: media-scheduler-frontend
