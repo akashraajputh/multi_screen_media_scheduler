@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { getWindowItemCounts } from './windowState'
 import './App.css'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://media-scheduler-backend.onrender.com'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -27,6 +28,7 @@ function App() {
   const [mediaLibrary, setMediaLibrary] = useState([])
   const [selectedWindowId, setSelectedWindowId] = useState(null)
   const [playlist, setPlaylist] = useState([])
+  const [playlistsByWindowId, setPlaylistsByWindowId] = useState({})
   const [syncEvent, setSyncEvent] = useState(null)
   const [newWindowName, setNewWindowName] = useState('')
   const [status, setStatus] = useState('Loading scheduler…')
@@ -58,8 +60,12 @@ function App() {
       return
     }
     const response = await request(`/api/windows/${windowId}/playlist`)
-    setPlaylist(response.playlist || [])
-  }, [])
+    const nextPlaylist = response.playlist || []
+    setPlaylistsByWindowId((previous) => ({ ...previous, [windowId]: nextPlaylist }))
+    if (selectedWindowId === windowId) {
+      setPlaylist(nextPlaylist)
+    }
+  }, [selectedWindowId])
 
   const loadDashboard = useCallback(async () => {
     setStatus('Refreshing scheduler…')
@@ -117,6 +123,11 @@ function App() {
     [selectedWindowId, windows],
   )
 
+  const windowItemCounts = useMemo(
+    () => getWindowItemCounts(windows, playlistsByWindowId),
+    [windows, playlistsByWindowId],
+  )
+
   const previewItem = playlist[playbackIndex % Math.max(playlist.length, 1)] || null
 
   const addWindow = async () => {
@@ -145,6 +156,11 @@ function App() {
 
       setWindows(remainingWindows)
       setSelectedWindowId((current) => (current === windowId ? nextWindowId : current))
+      setPlaylistsByWindowId((current) => {
+        const next = { ...current }
+        delete next[windowId]
+        return next
+      })
 
       if (nextWindowId) {
         await refreshPlaylist(nextWindowId)
@@ -277,7 +293,7 @@ function App() {
                   onClick={() => setSelectedWindowId(window.id)}
                 >
                   <span>{window.name}</span>
-                  <small>{playlist.length} items</small>
+                  <small>{windowItemCounts[window.id] ?? 0} items</small>
                 </button>
                 <button
                   type="button"
